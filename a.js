@@ -1,5 +1,5 @@
-//import fixed to require?
 import b from './b.js'
+import "./test.css"
 
-var a = 'i am a'
+let a = 'i am a'
 console.log(a, b)

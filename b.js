@@ -1,6 +1,6 @@
-var b = 'i am b'
+let b = 'i am b'
 console.log(b)
+import c from './examples/c.js'
 
-module.exports = b
-
+export default b + c
 

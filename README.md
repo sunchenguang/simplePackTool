@@ -1,12 +1,3 @@
 ### 实现一个简易版打包工具
-#### 思路
-1. 找出入口文件所有的依赖关系
-    1. 读取并编译入口文件代码
-    2. 依据入口文件代码深度遍历所有依赖文件（包括子级）
-    3. 对外输出依赖关系
-2. 通过构建CommonJS代码来获取exports导出的内容
-    1. 构建modules对象字符串（key为文件path, 值为对应的函数，函数中包裹着对应的es5代码）
-    2. 构建result函数字符串，并传入modules参数，函数中构建require函数，用于获取获取并执行对应文件
-    3. 执行`require(entry)`, 即执行对应的文件
 
-
+![image](http://ww1.sinaimg.cn/large/005F15EAly1g23gkwlpwoj313w0demzq.jpg)

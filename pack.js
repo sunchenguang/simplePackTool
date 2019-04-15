@@ -4,8 +4,12 @@ const babylon = require('babylon')
 const traverse = require('babel-traverse').default
 const {transformFromAst} = require('babel-core')
 
+//唯一标识每个依赖项
+let INIT_ID = 0
+let ID = INIT_ID
+
 /**
- * 读取文件，并经过babel编译代码，拿出文件所有依赖项
+ * 读取文件，并经过babel编译代码，拿出文件所有依赖项, 每个file有唯一标识id
  * @param filePath
  * @returns {{code, filePath: *, dependencies: Array}}
  */
@@ -20,9 +24,6 @@ function readCode(filePath) {
     //遍历ast, 拿出文件所有依赖
     const dependencies = []
     traverse(ast, {
-        // enter(path) {
-        //     console.log(path)
-        // }
         ImportDeclaration: ({node}) => {
             //依赖文件的相对路径
             dependencies.push(node.source.value)
@@ -37,9 +38,28 @@ function readCode(filePath) {
     return {
         filePath,
         dependencies,
-        code
+        code,
+        id: ID++
     }
 
+}
+
+/**
+ * 读取css代码
+ */
+function readCssCode(filePath) {
+    const content = fs.readFileSync(filePath, 'utf-8')
+    const code = `
+        const style = document.createElement('style')
+        style.innerText = ${JSON.stringify(content).replace(/\\n/g, '')}
+        document.head.appendChild(style)
+    `
+    return {
+        filePath,
+        dependencies: [],
+        code,
+        id: ID++
+    }
 }
 
 /**
@@ -55,28 +75,18 @@ function getDependencies(entry) {
 
     for (const asset of dependencies) {
         const dirname = path.dirname(asset.filePath)
+        asset.mapping = {}
         // 遍历asset的依赖，区分css和js
         asset.dependencies.forEach((relativePath) => {
             const absolutePath = path.join(dirname, relativePath)
+            let child
             if (/\.css$/.test(absolutePath)) {
-                const content = fs.readFileSync(absolutePath, 'utf-8')
-                const code = `
-                    const style = document.createElement('style')
-                    style.innerText = ${JSON.stringify(content).replace(/\\r\\n/g, '')}
-                    document.head.appendChild(style)
-                `
-                dependencies.push({
-                    filePath: absolutePath,
-                    relativePath,
-                    dependencies: [],
-                    code
-                })
-
+                child = readCssCode(absolutePath)
             } else {
-                const child = readCode(absolutePath)
-                child.relativePath = relativePath
-                dependencies.push(child)
+                child = readCode(absolutePath)
             }
+            dependencies.push(child)
+            asset.mapping[relativePath] = child.id
         })
     }
 
@@ -92,9 +102,8 @@ function bundle(dependencies, entry) {
     //构建modules字符串（内容是对象）
     let modules = ''
     dependencies.forEach((dep) => {
-        const filePath = dep.relativePath || entry
         modules += `
-            '${filePath}': function (module, exports, require) {${dep.code}},
+            '${dep.id}': [function (module, exports, require) {${dep.code}}, ${JSON.stringify(dep.mapping)}],
         `
     })
     //构建result字符串，内容是require(entry)
@@ -102,11 +111,19 @@ function bundle(dependencies, entry) {
         (
             function(modules) {
                 function require(id) {
+                    const [fn, mapping] = modules[id]
+                    //从mapping中拿出path对应的id
+                    function localRequire(path) {
+                        return require(mapping[path])
+                    }
+                  
                     const module = {exports: {}}
-                    modules[id](module, module.exports, require)
+                    fn(module, module.exports, localRequire)
+                    
                     return module.exports
                 }
-                require('${entry}')
+                
+                require(${INIT_ID})
             }
         
         )({${modules}})
